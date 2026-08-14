@@ -72,7 +72,8 @@
     position: absolute; top: 6px; bottom: 6px; left: 0; width: 0; opacity: 0;
     border-radius: 999px; background: var(--pink); z-index: 0;
     box-shadow: 0 4px 14px rgba(255,0,153,.35), inset 0 1px 0 rgba(255,255,255,.35);
-    transition: transform .55s var(--ease), width .55s var(--ease), opacity .3s var(--ease);
+    will-change: transform, width;
+    transition: transform .5s var(--ease), width .5s var(--ease), opacity .3s var(--ease);
   }
   .nav-pill a {
     position: relative; z-index: 1;
@@ -523,12 +524,14 @@
       return { l: l, sec: document.getElementById(l.getAttribute('href').slice(1)) };
     }).filter(function (x) { return x.sec; });
 
-    function setActive(link) {
+    function setActive(link, instant) {
       links.forEach(function (l) { l.classList.toggle('active', l === link); });
       if (link && link.offsetParent) {
+        if (instant) ind.style.transition = 'none';
         ind.style.opacity = '1';
         ind.style.width = link.offsetWidth + 'px';
         ind.style.transform = 'translateX(' + link.offsetLeft + 'px)';
+        if (instant) { void ind.offsetWidth; ind.style.transition = ''; }
       } else {
         ind.style.opacity = '0';
       }
@@ -541,15 +544,36 @@
       }
       return cur.l;
     }
+    /* While a click-initiated smooth scroll is in flight, the spy stays quiet
+       so the indicator makes one clean glide instead of hopping through every
+       section it passes. */
+    var lockUntil = 0;
     var t = null;
     function onScroll() {
       if (t) return;
-      t = setTimeout(function () { t = null; setActive(current()); }, 80);
+      t = setTimeout(function () {
+        t = null;
+        if (Date.now() < lockUntil) return;
+        setActive(current());
+      }, 80);
     }
     window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
-    links.forEach(function (l) { l.addEventListener('click', function () { setActive(l); }); });
-    setActive(current());
+    if ('onscrollend' in window) {
+      window.addEventListener('scrollend', function () {
+        if (lockUntil) { lockUntil = 0; setActive(current()); }
+      });
+    }
+    window.addEventListener('resize', function () { setActive(current(), true); });
+    links.forEach(function (l) {
+      l.addEventListener('click', function () {
+        lockUntil = Date.now() + 1200;
+        setActive(l);
+      });
+    });
+    setActive(current(), true);
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(function () { setActive(current(), true); });
+    }
   })();
   </script>
 
